@@ -38,6 +38,29 @@ build verifies the release SHA-256 before unpacking.
 If you would rather not build at all, upstream publishes official images at
 `ghcr.io/shadowsocks/ssserver-rust`.
 
+### BuildKit is required
+
+`$BUILDPLATFORM` is only defined under BuildKit. The legacy builder fails with
+an opaque `"" is an invalid OS component` error, and Azure ACR Tasks
+(`az acr build`) fails its dependency scan with `unable to understand line
+FROM --platform=$BUILDPLATFORM`. Build locally with buildx and push the result.
+
+On macOS, Homebrew installs buildx to `$(brew --prefix)/bin/docker-buildx` but
+does not link it where the Docker CLI looks:
+
+    mkdir -p ~/.docker/cli-plugins
+    ln -sfn "$(brew --prefix)/bin/docker-buildx" ~/.docker/cli-plugins/docker-buildx
+
+### Pushing to Azure Container Instances
+
+BuildKit attaches provenance and SBOM attestations by default, which makes even
+a single-platform build push an OCI image index containing an extra
+`unknown/unknown` manifest. ACI cannot resolve that and reports
+`InaccessibleImage`. Disable them so the tag points at a plain image manifest:
+
+    docker build --platform linux/amd64 --provenance=false --sbom=false \
+      -t <registry>.azurecr.io/ss:1.25.0 .
+
 Ciphers
 -------
 
