@@ -1,15 +1,82 @@
 docker-shadowsocks
 ==================
 
-This Dockerfile builds an image with the Python implementation of [shadowsocks](https://github.com/shadowsocks/shadowsocks). Based on Ubuntu 16.04 image.
+This Dockerfile builds a small Alpine-based image running
+[shadowsocks-rust](https://github.com/shadowsocks/shadowsocks-rust), the
+maintained Shadowsocks implementation. Multi-arch: `linux/amd64`, `linux/arm64`,
+`linux/arm/v7`, `linux/arm/v6`, `linux/386`.
 
 Quick Start
 -----------
 
-This image uses ENTRYPOINT to run the containers as an executable. 
+This image uses ENTRYPOINT to run the container as an executable.
 
-    docker run -d -p 1984:1984 oddrationale/docker-shadowsocks -s 0.0.0.0 -p 1984 -k $SSPASSWORD -m aes-256-cfb
+    docker run -d \
+      -p 8388:8388/tcp -p 8388:8388/udp \
+      ss -s 0.0.0.0:8388 -k "$SSPASSWORD" -m aes-256-gcm
 
-You can configure the service to run on a port of your choice. Just make sure the port number given to Docker is the same as the one given to shadowsocks. Also, it is  highly recommended that you store the shadowsocks password in an environment variable as shown above. This way the password will not show in plain text when you run `docker ps`.
+You can configure the service to run on a port of your choice. Just make sure
+the port number given to Docker is the same as the one given to shadowsocks.
+Also, it is highly recommended that you store the shadowsocks password in an
+environment variable as shown above. This way the password will not show in
+plain text when you run `docker ps`.
 
-For more command line options, refer to the [shadowsocks documentation](https://github.com/shadowsocks/shadowsocks/tree/master)
+Publish UDP as well as TCP if you need UDP relay.
+
+Building
+--------
+
+    docker build -t ss .
+
+Multi-arch, e.g. to target a Raspberry Pi from an x86 host:
+
+    docker buildx build --platform linux/amd64,linux/arm64,linux/arm/v7 -t ss .
+
+Pin a different upstream release with `--build-arg SS_VERSION=1.25.0`. The
+build verifies the release SHA-256 before unpacking.
+
+If you would rather not build at all, upstream publishes official images at
+`ghcr.io/shadowsocks/ssserver-rust`.
+
+Ciphers
+-------
+
+Prefer `2022-blake3-aes-256-gcm` where both ends support it — it adds replay
+protection and does not respond to malformed probes, which matters if the server
+is somewhere subject to active probing. It takes two pre-shared keys:
+
+    SERVER_PSK=$(openssl rand -base64 32)
+    CLIENT_PSK=$(openssl rand -base64 32)
+
+Otherwise use an AEAD cipher: `aes-256-gcm`, `aes-128-gcm`, or
+`chacha20-ietf-poly1305`.
+
+Stream ciphers such as `aes-256-cfb` are unauthenticated, are deprecated
+upstream as UNSAFE, and are **not compiled into the release binaries** this
+image uses. They will not work.
+
+Upgrading from the old image
+----------------------------
+
+This image previously ran the Python `shadowsocks` package on Ubuntu 16.04.
+That package's last release was 2.8.2 in **2015** and it is Python 2 era, so
+there is no newer version of it to move to — hence the switch to
+shadowsocks-rust. Three things changed in the invocation:
+
+| Before | Now |
+|---|---|
+| `-s 0.0.0.0 -p 1984` | `-s 0.0.0.0:8388` — host and port are one argument |
+| `-m aes-256-cfb` | `-m aes-256-gcm` or `-m 2022-blake3-aes-256-gcm` |
+| default port 1984 | default exposed port 8388 |
+
+The container also now runs as a non-root user.
+
+For more command line options, refer to the
+[shadowsocks-rust documentation](https://github.com/shadowsocks/shadowsocks-rust).
+
+Guides
+------
+
+- [Raspberry Pi China Exit Node](docs/china-exit-node.md) — end-to-end setup for a
+  self-hosted mainland-China exit node (Pi + frp reverse tunnel + Shadowsocks-2022
+  + self-hosted DNS), for reaching CN-geolocked streaming from abroad.
