@@ -51,9 +51,10 @@ is somewhere subject to active probing. It takes two pre-shared keys:
 Otherwise use an AEAD cipher: `aes-256-gcm`, `aes-128-gcm`, or
 `chacha20-ietf-poly1305`.
 
-Stream ciphers such as `aes-256-cfb` are unauthenticated, are deprecated
-upstream as UNSAFE, and are **not compiled into the release binaries** this
-image uses. They will not work.
+Stream ciphers such as `aes-256-cfb` are unauthenticated and are deprecated
+upstream as UNSAFE. They still run in the current release binaries, but the
+server logs a warning on startup and upstream states they will be removed in a
+future release. Do not use them.
 
 Upgrading from the old image
 ----------------------------
@@ -66,10 +67,14 @@ shadowsocks-rust. Three things changed in the invocation:
 | Before | Now |
 |---|---|
 | `-s 0.0.0.0 -p 1984` | `-s 0.0.0.0:8388` — host and port are one argument |
-| `-m aes-256-cfb` | `-m aes-256-gcm` or `-m 2022-blake3-aes-256-gcm` |
+| `-m aes-256-cfb` | `-m aes-256-gcm` or `-m 2022-blake3-aes-256-gcm` — see below |
 | default port 1984 | default exposed port 8388 |
 
 The container also now runs as a non-root user.
+
+Note that `-m aes-256-cfb` does **not** fail after upgrading — the server still
+starts and only logs a deprecation warning. Change the cipher deliberately;
+nothing will force you to.
 
 For more command line options, refer to the
 [shadowsocks-rust documentation](https://github.com/shadowsocks/shadowsocks-rust).
